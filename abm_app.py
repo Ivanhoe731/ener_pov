@@ -63,7 +63,7 @@ def plot_heatmap(year):
     # Normalize wealth values to range from 0 to 1 for better coloring
     heatmap_data = (heatmap_data - np.min(heatmap_data)) / (np.max(heatmap_data) - np.min(heatmap_data))
     # Plot the heatmap
-    fig, ax = plt.subplots(figsize = (5,5))
+    fig, ax = plt.subplots(figsize = (1,1))
     sns.heatmap(heatmap_data, cmap='coolwarm', ax=ax)
     st.pyplot(fig)
 
