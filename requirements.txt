@@ -3,3 +3,4 @@ mesa
 pandas
 numpy
 matplotlib
+seaborn
