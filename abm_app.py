@@ -308,7 +308,7 @@ def model_page():
 
         # Plot the data using Matplotlib
         st.subheader("Model Outputs")
-        fig, axs = plt.subplots(6, 1, figsize=(10, 15))
+        fig, axs = plt.subplots(5, 1, figsize=(10, 15))
 
         axs[0].plot(model_df["Total Wealth"])
         axs[0].set_title("Total Wealth Over Time")
