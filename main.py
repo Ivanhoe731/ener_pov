@@ -1,5 +1,5 @@
 import streamlit as st
-from abm_app import model_page
+from abm import model_page
 from info_page import info_page
 from code_page import code_page
 
