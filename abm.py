@@ -458,7 +458,7 @@ def model_page():
     # ALLOWENCE_BUDGET = st.slider('Allowance Budget', 1000, 10000, 5000)
     # ALLOWENCE_FROM = st.slider('Allowance From', 10, 100, 20)
 
-    st.caption("It takes from 30 second up to 2 minutes to intialize and run the code. You can check that model is running calculation in top right corner.", unsafe_allow_html=False, help=None)
+    st.caption("It takes from 30 second up to 2 minutes to intialize and run the code. You can check that model is running calculation in top right corner.")
 
     #if st.button("Run Model"):
     model = Country(N, median_income, min_disposal, gini_target, inability_target, arrears_target, growth_boundaries, prices, shares_p, growth_rate_lower_bound, growth_rate_upper_bound,restoration_ACTIVE, allowence_ACTIVE, price_shock)
