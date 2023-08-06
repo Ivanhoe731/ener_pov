@@ -12,158 +12,401 @@ def code_page():
 def get_model_source_code():
     # Paste the code directly here as a string
     source_code = """
-class Person(Agent):
-    def __init__(self, unique_id, model, initial_income, inability = False, arrears = False, dwellings = 25, technology = 25, upgrade_cost_factor=100): ## THE HARDCODED VALUES SHOULD BE CHANGED LATER
+
+## Loading neccessary libraries 
+
+from mesa import Agent, Model
+from mesa.time import RandomActivation
+from mesa.datacollection import DataCollector
+import numpy as np
+import scipy.stats as stats
+import pandas as pd
+import random
+import plotly.graph_objects as go
+import plotly.subplots as sp
+import plotly.express as px
+import seaborn as sns
+
+
+## Constant variables which will be updated in newer versions of the model to parameters of the Country class 
+## All variables are by default unitless, but have assgined units for beeter illustration
+
+
+COST_INSULATION = 0.45 # cost of insulating square foot, can be considered cents of euro
+TRESHOLD_LEVEL = 0.25  # treshold level for arrears 
+RESTORATION_COST = 1122 * COST_INSULATION # Restoration cost of one household, 1122 is average european house size in square feet
+DWELLING_RESTORATION_LIMIT = 900 # upper limit of restoring one dwelling 
+RESTORATION_DWELLING_REDUCTION = 0.5 # reduction of dwelling effectivity
+RESTORATION_STEP = 7 # the step of simulation in which restoration policy executes
+GRANULARITY = 'MONTH'  ## in further version of the model can be used to select granularity of studied steps
+INABILITY_TRESHOLD = 0.1 # percentage of disposable income allocated to energy utility bills treshold, above which household is marked as in "inability" to keep dwelling adequately warm
+ARREARS_TRESHOLD = 0.75 # similar to inability, but decisive treshold for arrears 
+MPS_VALUES = [0.1, 0.13, 0.17, 0.20, 0.25] # Marginal Propensity to save by qunitiles from lowest to highest 
+SHOCK_INDEX = 0  # price index to which shokc shall be applied, 0 is yellow fuel, 1 brown fuel  
+SHOCK_MAGNITUDE = 0.5 # magnitude of price shock in percentage 
+SHOCK_STEP = 5 # step in which price shock happens, if the schock is executed in the simulation 
+ALLOWENCE_CHEQUE = 50 # amount of the allowence cheque assigned to households 
+RESTORATION_BUDGET = 12000 # overall budget allocated to restoration policy 
+ALLOWENCE_BUDGET = 50000 # overall budget allocated to allowence policy 
+ALLOWENCE_FROM = 9 # step in which allowence policy is excercissed
+
+class Household(Agent):
+    def __init__(self, unique_id, model, disposable_income, dwelling, inability=False, restoration_recieved = False):
         super().__init__(unique_id, model)
-        self.disposable_income = initial_income
-        self.wealth = 0  # The wealth is now separate from income
-        self.energy_set = "bad"  # Assume everyone starts with a 'bad' energy set
-        self.inability = inability
-        self.dwellings = dwellings  # Assume everyone starts with low quality dwelling
-        self.technology = technology  # Assume everyone starts with low quality technology
-        self.arrears = arrears  # Assume no one has arrears to start
-        self.energy_cost = 0  # Will be calculated each step based on energy_set and quality
+        self.disposable_income = disposable_income # disposalble income of household
+        self.dwelling = dwelling # energy intensity of household 
+        self.inability = inability # boolean denoting weather household is in inability 
+        self.savings = 0  # savings is initialized as 0 
+        self.arrears = 0 # amount 
+        self.x = random.uniform(0, 1) # random x coordinate to visualize agents 
+        self.y = random.uniform(0, 1) # random y coordonate to visualize agents  
+        self.restoration_recieved = restoration_recieved # boolean to denote weather agent recieved restoration help in restoration program 
+        self.allowence_recieved = False # wheather household recieved allowence under allowence program
+        self.allowence_cheques_sum = 0 # total amount of allowence cheques assigned to agent 
+        self.mps = 0 # marginal propensity to save initialized to zero and later changed accordignly to income quintile 
+        self.daai = 0 # disposable income after allowences 
 
-    def minimal_energy_consumption(self):
-        # Define how dwelling and technology quality affect energy consumption
-        return self.dwellings * self.technology / 10000  # Replace this formula as needed
+    @property
+    def energy_cost(self):
+        """Calculate and return the current energy cost for the agent."""
+        return self.model.energy_price * (self.dwelling)
+    
+    # Assign marginal propensity to save 
+    def update_mps(self):
+        # Get all agent incomes
+        incomes = [a.disposable_income for a in self.model.schedule.agents]
 
+        # Calculate the quintile thresholds
+        thresholds = np.quantile(incomes, [0.2, 0.4, 0.6, 0.8]) # artbitratly set income tresholds 
+
+        # Determine which quintile the agent's income belongs to
+        quintile = np.digitize(self.disposable_income, thresholds)
+
+        # Set the MPS based on the quintile
+        self.mps = MPS_VALUES[quintile]
+        
     def step(self):
-        # Check if the person can afford to upgrade dwelling or technology
-        dwelling_upgrade_cost = upgrade_cost_factor * exp(self.dwellings / 100)
-        technology_upgrade_cost = upgrade_cost_factor * exp(self.technology / 100)
+        """Update the agents savings in a step."""
+        # Calculate energy costs
+        energy_costs = self.energy_cost
 
-        # Determine which upgrade is more beneficial (reduces energy cost more)
-        dwelling_savings = self.energy_cost * (self.dwellings / 100)
-        technology_savings = self.energy_cost * (self.technology / 100)
+        self.update_mps()
 
-        if dwelling_savings > dwelling_upgrade_cost and dwelling_savings > technology_savings:
-            # If potential savings from upgrading dwelling are greater than the cost and more than from upgrading technology, upgrade dwelling
-            self.dwellings += 1
-            self.wealth -= dwelling_upgrade_cost  # Pay the cost to upgrade
-        elif technology_savings > technology_upgrade_cost:
-            # If potential savings from upgrading technology are greater than the cost, upgrade technology
-            self.technology += 1
-            self.wealth -= technology_upgrade_cost  # Pay the cost to upgrade
+        # Check if the agent is in arrears
+        if energy_costs > self.disposable_income * ARREARS_TRESHOLD:  # now considering arrears if energy cost exceeds ARREARS_TRESHOLD of disposable income
+            self.arrears += energy_costs
+        else:
+            self.savings += (self.disposable_income - energy_costs) * self.mps
 
-        # Check if the person can afford to switch to 'good' energy set
-        if self.energy_set == "bad" and self.wealth > self.model.switch_cost:
-            # Calculate potential savings from switching
-            potential_savings = self.wealth * self.minimal_energy_consumption() * (self.model.bad_energy_cost_factor - self.model.good_energy_cost_factor) * self.model.switch_cost_payback
-            if potential_savings > self.model.switch_cost:
-                # If potential savings are greater than the switch cost, switch to 'good' energy set
-                self.energy_set = "good"
-                self.wealth -= self.model.switch_cost  # Pay the cost to switch
+        # If the agent has arrears
+        if self.arrears > 0:
+            if self.savings >= self.arrears:  # and if savings can cover it
+                self.savings -= self.arrears
+                self.arrears = 0 # clear the arrears amount
+            else:  # if savings cannot cover it
+                self.arrears = self.arrears - self.savings  # set arrears to remaining amount
+                self.savings = 0
 
-        # Calculate energy cost based on energy set, minimal energy consumption and renewable energy share
-        cost_factor = self.model.bad_energy_cost_factor if self.energy_set == "bad" else self.model.good_energy_cost_factor
-        renewable_factor = 1 / (1 + self.model.renewable_share)
-        self.energy_cost = self.wealth * self.minimal_energy_consumption() * (1 - self.model.tech_progress) * cost_factor * renewable_factor
+        self.inability = self.energy_cost > self.disposable_income * INABILITY_TRESHOLD  # agent is in inability state if energy costs exceed 10% of income
 
-        # Subtract energy cost from disposable income
-        self.disposable_income -= self.energy_cost
+        # Update disposable income based on growth rate
+        growth_rate = np.random.uniform(self.model.growth_boundaries[0], self.model.growth_boundaries[1])
+        self.disposable_income *= (1 + growth_rate)
 
-        # Add remaining disposable income to wealth
-        self.wealth += self.disposable_income
 
-        # Check if the person falls into energy poverty (if energy cost >= 2 * median energy cost of all agents)
-        median_energy_cost = np.median([a.energy_cost for a in self.model.schedule.agents])
-        if self.energy_cost >= 2 * median_energy_cost:
-            # Take some action if the person falls into energy poverty
-            pass  # Placeholder for energy poverty action
+class Country(Model):
+    
+    # method to create such set of incomes which are close or equall to set gini coefficinet
+    @classmethod
+    def calculate_gini(cls, incomes):
+        incomes = np.sort(incomes)
+        n = len(incomes)
+        index = np.arange(1, n + 1)
+        return ((np.sum((2 * index - n  - 1) * incomes)) / (n * np.sum(incomes)))
 
-class Economy(Model):
-    def __init__(self, num_people, median_income, gini_target, tech_progress_rate, renewable_share, switch_cost, switch_cost_payback,bad_energy_cost_factor, good_energy_cost_factor,growth_bounds, rd_share, rd_min):
-        self.num_people = num_people
-        self.tech_progress = 0  # Start with no technological progress
-        self.tech_progress_rate = tech_progress_rate  # Rate at which technological progress occurs each step
-        self.renewable_share = renewable_share  # Proportion of energy that comes from renewable sources
-        self.switch_cost = switch_cost  # Cost for an agent to switch to the 'good' energy set
-        self.switch_cost_payback = switch_cost_payback  # How many steps it takes for the switch cost to pay back in savings
-        self.bad_energy_cost_factor = bad_energy_cost_factor # dont forhet to comment this
-        self.good_energy_cost_factor = good_energy_cost_factor # dont forget to comment this
-        self.growth_bounds = growth_bounds  # Bounds for random economic growth
-        self.economic_growth = 0
-        self.rd_share = rd_share  # Share of economic growth allocated to R&D
-        self.rd_min = rd_min # research and development investments 
+
+    # method is using the target gini coefficient to assign incomes according to gamma distribution 
+    # The process find the distribution of incomes itteratively 
+    @classmethod
+    def generate_income_distribution(cls, num_people, median_income, gini_target, lower_bound):
+        alpha = (gini_target + 1) / (2 - gini_target)
+        for _ in range(10000):
+            incomes = stats.gamma.rvs(alpha, scale=median_income/alpha, size=num_people)
+            incomes = np.clip(incomes, lower_bound, None)  # None means there is no upper bound
+            gini_current = cls.calculate_gini(incomes)
+            if np.isclose(gini_current, gini_target, atol=0.01):
+                return incomes
+            elif gini_current < gini_target:
+                alpha *= 0.9
+            else:
+                alpha *= 1.1
+
+        raise Exception(f"Failed to reach target Gini coefficient in 1000 iterations. Current Gini: {gini_current}")
+    
+
+    # Restoration program method sorts the agents by incomes and if the program is executed restores dwelling of agents sorted by income and dwelling intensity 
+    def restoration_program(self):
+
+        global RESTORATION_DWELLING_REDUCTION
+
+        # Sort the agents by income in ascending order
+        sorted_agents = sorted(self.schedule.agents, key=lambda agent: (agent.disposable_income, -agent.dwelling)) # agents sorted by ascending income and descending dwelling 
+
+        for agent in sorted_agents:
+            if self.restoration_budget >= self.restoration_cost:
+                # Assign the restoration
+                agent.restoration_recieved = True
+
+                agent.dwelling *= (1- RESTORATION_DWELLING_REDUCTION)
+
+                # Deduct the restoration cost from the budget
+                self.restoration_budget -= self.restoration_cost
+            else:
+                # If the budget is not sufficient for another restoration, break the loop
+                break
+
+    # allowence program works in similar manner to restoration program but sorts the agents only by income        
+    def allowence_program(self):
+
+        # Get a list of all agents' incomes
+        incomes = [agent.disposable_income for agent in self.schedule.agents]
+
+        # Compute the 40th percentile of income, which will serve as the cutoff
+        income_cutoff = np.percentile(incomes, 40)
+
+        # Sort the agents by income in ascending order
+        sorted_agents = sorted(self.schedule.agents, key=lambda agent: (agent.disposable_income))
+
+        for agent in sorted_agents:
+            # Check if the agent's income is below the cutoff
+            if agent.disposable_income <= income_cutoff and agent.inability:
+                if self.allowence_budget >= self.allowence_cheque:
+                    # Assign the allowance
+                    agent.allowence_recieved = True
+                    agent.allowence_cheques_sum += self.allowence_cheque
+                    agent.daai = agent.disposable_income - self.allowence_cheque 
+                    agent.disposable_income += self.allowence_cheque
+
+                    # Deduct the restoration cost from the budget
+                    self.allowence_budget -= self.allowence_cheque
+                else:
+                    # If the budget is not sufficient for another restoration, break the loop
+                    agent.daai = agent.disposable_income
+                    break
+            else:
+                agent.daai = agent.disposable_income
+
+    @staticmethod
+    def assign_inability(agents, inability_start):
+        #Assigns the inability to the agents.
+        agents.sort(key=lambda x: x.disposable_income)
+
+        num_agents = len(agents)
+        num_unable = int(inability_start * num_agents)
+        inability_per_quintile = np.array([2, 1.6, 1.2, 0.8, 0]) # These values are set arbitrarily 
+        inability_per_quintile *= num_unable / np.sum(inability_per_quintile)
+        inability_per_quintile = inability_per_quintile.astype(int)
+
+        assigned_unable = 0
+        for i in range(5):  # For each quintile
+            start = i * num_agents // 5
+            end = (i + 1) * num_agents // 5 if i < 4 else num_agents
+            quintile = agents[start:end]
+            num_unable_quintile = min(inability_per_quintile[i], len(quintile))
+            unable_agents = np.random.choice(quintile, num_unable_quintile, replace=False)
+            for agent in unable_agents:
+                agent.inability = True
+            assigned_unable += num_unable_quintile
+
+        # Assign remaining inability if any
+        i = 0
+        while assigned_unable < num_unable:
+            start = i * num_agents // 5
+            end = (i + 1) * num_agents // 5 if i < 4 else num_agents
+            quintile = [agent for agent in agents[start:end] if not agent.inability]
+            if quintile:
+                agent = np.random.choice(quintile)
+                agent.inability = True
+                assigned_unable += 1
+            else:
+                i += 1
+
+    @staticmethod
+    def assign_arrears(agents, arrears_start):
+
+        #Assigns the arrears to the agents.
+
+        agents.sort(key=lambda x: x.disposable_income)
+
+        num_agents = len(agents)
+        num_arrears = int(arrears_start * num_agents)
+        arrears_per_quintile = np.array([2, 1.6, 0, 0, 0])
+        arrears_per_quintile *= num_arrears / np.sum(arrears_per_quintile)
+        arrears_per_quintile = arrears_per_quintile.astype(int)
+
+        assigned_arrears = 0
+        for i in range(5):  # For each quintile
+            start = i * num_agents // 5
+            end = (i + 1) * num_agents // 5 if i < 4 else num_agents
+            quintile = agents[start:end]
+            num_arrears_quintile = min(arrears_per_quintile[i], len(quintile))
+            arrears_agents = np.random.choice(quintile, num_arrears_quintile, replace=False)
+            for agent in arrears_agents:
+                agent.arrears = 2 * ARREARS_TRESHOLD * agent.disposable_income  # assign 0.6 * disposable_income
+            assigned_arrears += num_arrears_quintile
+
+        # Assign remaining arrears if any
+        i = 0
+        while assigned_arrears < num_arrears:
+            start = i * num_agents // 5
+            end = (i + 1) * num_agents // 5 if i < 4 else num_agents
+            quintile = [agent for agent in agents[start:end] if not agent.arrears > 0]
+            if quintile:
+                agent = np.random.choice(quintile)
+                agent.arrears = ARREARS_TRESHOLD * agent.disposable_income  # assign 0.6 * disposable_income
+                assigned_arrears += 1
+            else:
+                i += 1
+
+
+    @staticmethod
+    def assign_dwelling(agents, energy_price):
+
+        #Assigns the dwelling to the agents.
+
+        buffer = 0.02  # 2% buffer or margin
+        all_incomes = [agent.disposable_income for agent in agents]
+        quintile_thresholds = np.quantile(all_incomes, [0.2, 0.4])  # Calculate income thresholds for the bottom two quintiles
+        for agent in agents:
+            min_dwelling, max_dwelling = 500, 2000
+            if agent.inability:
+                min_dwelling = max(min_dwelling, int(np.ceil((agent.disposable_income * (INABILITY_TRESHOLD + buffer)) / energy_price)))
+            else:
+                max_dwelling = min(max_dwelling, int((agent.disposable_income * (INABILITY_TRESHOLD - buffer)) / energy_price))
+
+            # Generate a list of feasible dwelling values
+            feasible_dwelling = list(range(min_dwelling, max_dwelling + 1))
+
+            # If the list is not empty, select a random dwelling from the list
+            if feasible_dwelling:
+                agent.dwelling = np.random.choice(feasible_dwelling)
+            else:
+                agent.dwelling = min_dwelling  # fallback to the min_dwelling if no other options
+
+            # Check income quintile of the agent and if in inability state, increase dwelling size
+            if agent.disposable_income < quintile_thresholds[1] and agent.inability:  # If in bottom two quintiles and inability is True
+                agent.dwelling = min(max_dwelling, int(agent.dwelling * 1.25))  # Increase dwelling size by 25%, but not more than max_dwelling
+
+    def __init__(self, N, median_income, min_disposal, gini_target, inability_target, arrears_target, growth_boundaries, prices, shares_p, growth_rate_lower_bound, growth_rate_upper_bound, restoration_ACTIVE = False, allowence_ACTIVE = False, price_shock = False):
+        self.num_agents = N # total number of agents 
+        self.median_income = median_income # median income used for gini distribution target
+        self.min_disposal = min_disposal # minimal disposable income used for fini distribution target
+        self.gini_target = gini_target # target of Gini index distribution 
+        self.inability_target = inability_target # share of agents with inability in the first step od the simulation 
+        self.growth_boundaries = growth_boundaries # how much does disposable income grows every step 
+        self.prices = prices # prices of each fuel 
+        self.shares_p = shares_p # shares of each fuel in the energy mix of the Country 
+        self.growth_rate_lower_bound = growth_rate_lower_bound # lower bounds of growth rates of fuel prices 
+        self.growth_rate_upper_bound = growth_rate_upper_bound # upper bound ...
+        self.price_shock = price_shock # boolean of introducing price shock in the Country 
+        self.restoration_ACTIVE = restoration_ACTIVE # Boolean activating restoration program 
+        self.allowence_ACTIVE = allowence_ACTIVE # Boolean activating allowence program 
+        self.restoration_cost = RESTORATION_COST # viz Variables  
+        self.restoration_budget = RESTORATION_BUDGET # viz Variables 
+        self.allowence_budget = ALLOWENCE_BUDGET # viz Variables 
+        self.allowence_cheque = ALLOWENCE_CHEQUE # viz Variables 
+        self.arrears_target = arrears_target # targeted share of arrears assigned to households 
+        
+        
+        # Schedule randomly initializes agents 
         self.schedule = RandomActivation(self)
-        
-        incomes = generate_income_distribution(num_people, median_income, gini_target)
-        sorted_incomes = np.sort(incomes)
 
+        # datacolelctor collects data for each step simulated 
+        self.datacollector = DataCollector(
+        agent_reporters={"Dwelling": "dwelling", 
+                        "Income": "disposable_income",
+                        "Inability": "inability",
+                        "Savings":"savings",
+                        "X":"x",
+                        "Y":"y",
+                        "MPS":"mps",
+                        "DAAI":"daai",
+                        "Allowence":"allowence_cheques_sum",
+                        "Restoration Aid Recieved":"restoration_recieved",
+                        "Arrears":"arrears",
+                        "EnergyCost": "energy_cost"},
+        model_reporters = {
+                        "Inability": lambda model: sum(agent.inability for agent in model.schedule.agents) / model.num_agents,
+                        "Arrears": lambda model: sum(agent.arrears for agent in model.schedule.agents) / model.num_agents,
+                        "Allowences": lambda model: sum(agent.allowence_cheques_sum for agent in model.schedule.agents) / model.num_agents,
+                        "Energy Price": lambda model: model.energy_price,
+                        "Price Yellow Fuel": lambda model: model.prices[0],
+                        "Price Brown Fuel": lambda model: model.prices[1],
+                        "Average Dwelling Over Time": lambda model: sum(agent.dwelling for agent in model.schedule.agents) / model.num_agents,
+                        "Restorations": lambda m: sum([agent.restoration_recieved for agent in m.schedule.agents])}
+                        )
 
-        # Define lower, middle and high income groups
-        lower_income_threshold = np.percentile(sorted_incomes, 20)  # Bottom 20%
-        middle_income_threshold = np.percentile(sorted_incomes, 50)  # Up to 50%
-        high_income_threshold = np.percentile(sorted_incomes, 80)  # Up to 80%
+        # Generate disposable incomes and assign dwelling and technology
+        incomes = self.generate_income_distribution(self.num_agents, self.median_income, self.gini_target, self.min_disposal)
 
+        # initial energy price calculated as product of prices and share of each fuel in fuel mix
+        self.initial_energy_price = np.dot(self.prices, self.shares_p)
 
-        lower_income_group = sorted_incomes[sorted_incomes < lower_income_threshold]
-        middle_income_group = sorted_incomes[(sorted_incomes >= lower_income_threshold) & (sorted_incomes < middle_income_threshold)]
-        high_income_group = sorted_incomes[(sorted_incomes >= middle_income_threshold) & (sorted_incomes < high_income_threshold)]
-        
+ 
+        # Create agents
+        agents = []
+        for i in range(self.num_agents):
+            a = Household(i, self, disposable_income=incomes[i], dwelling=0, inability=False)
+            agents.append(a)
 
-        # Combine lower, middle and high income groups, with lower income group having more weight
-        combined_group = np.concatenate([lower_income_group, middle_income_group, high_income_group])
-        weights = [0.75 if income < lower_income_threshold else 0.5 if income < middle_income_threshold else 0.25 for income in combined_group]
+        # apply the constructed methods to agents 
+        self.assign_inability(agents, self.inability_target)
+        self.assign_dwelling(agents, self.energy_price)
+        self.assign_arrears(agents, self.arrears_target)
+        self.assign_mps(agents)
 
-
-        # Normalize the weights
-        weights = weights / np.sum(weights)
-
-        # Randomly assign inability, arrears, and dwellings based on weights
-        inability_group = choice(combined_group, size=int(num_people * 0.15), replace=False, p=weights)  # 15% of agents with inability
-        arrears_group = choice(combined_group, size=int(num_people * 0.07), replace=False, p=weights)  # 7% of agents with arrears
-        # Randomly assign bad dwellings and bad technologies based on weights
-        bad_dwellings_group = choice(combined_group, size=int(num_people * 0.07), replace=False, p=weights)  # 7% of agents with bad dwellings
-        bad_technologies_group = choice(combined_group, size=int(num_people * 0.07), replace=False, p=weights)  # 7% of agents with bad technologies
-
-
-        for i in range(num_people):
-            inability = incomes[i] in inability_group
-            arrears = incomes[i] in arrears_group
-            # Now we determine the quality score for dwelling and technology based on income percentile
-            income_percentile = stats.percentileofscore(sorted_incomes, incomes[i])
-
-            # Agents in bad dwellings or with bad technologies start with a score of 25
-            # Others start with a score of 25 + income percentile * proportionality parameter
-            dwellings = 25 if incomes[i] in bad_dwellings_group else 25 + income_percentile * 0.5  # Proportionality parameter for dwellings is 0.5
-            technology = 25 if incomes[i] in bad_technologies_group else 25 + income_percentile * 0.75  # Proportionality parameter for technology is 0.75
-
-
-            a = Person(i, self, incomes[i], inability, arrears, dwellings, technology,upgrade_cost_factor)
+        # Add agents to the model
+        for a in agents:
             self.schedule.add(a)
 
-        
-        self.datacollector = DataCollector(
-            model_reporters={
-                "Total Wealth": lambda m: sum([agent.wealth for agent in m.schedule.agents]), 
-                "Gini": lambda m: calculate_gini([agent.wealth for agent in m.schedule.agents]),
-                "Wealth Distribution": lambda m: calculate_wealth_distribution([agent.wealth for agent in m.schedule.agents]),
-                "2M indicator": lambda m: len([agent for agent in m.schedule.agents if agent.energy_cost >= 2 * np.median([a.energy_cost for a in m.schedule.agents])]),
-                "Energy Poverty": lambda m: (sum([0.5*agent.inability + 0.25*(agent.dwellings=="bad") + 0.25*agent.arrears for agent in m.schedule.agents]) / m.num_people) * 100,
-                "Tech Progress": lambda m: m.tech_progress,
-                "Growth": lambda m: m.economic_growth,
-            },
-            agent_reporters={
-                "Wealth": lambda a: a.wealth,
-                "Energy Cost": lambda a: a.energy_cost
-            }
-        )
+    @staticmethod
+    def assign_mps(agents):
+ 
+        #Assigns the MPS to the agents based on their income quintile.
+
+        agents.sort(key=lambda x: x.disposable_income)
+
+        num_agents = len(agents)
+        for i in range(5):  # For each quintile
+            start = i * num_agents // 5
+            end = (i + 1) * num_agents // 5 if i < 4 else num_agents
+            quintile_agents = agents[start:end]
+            for agent in quintile_agents:
+                agent.mps = MPS_VALUES[i]
+
+    @property
+    def energy_price(self):
+        """Calculate and return the current energy price."""
+        return np.dot(self.prices, self.shares_p)
+
     def step(self):
-        '''Advance the model by one step.'''
-        self.datacollector.collect(self)
+        """Advance the model by one step."""
+        self.datacollector.collect(self)  # Collect data before updating the prices
 
-        # Determine the economic growth for this step
-        self.economic_growth = np.random.uniform(self.growth_bounds[0], self.growth_bounds[1])
+        # Update prices based on unique growth rates
+        growth_rates = np.random.uniform(self.growth_rate_lower_bound, self.growth_rate_upper_bound)
 
-        # Update disposable income of the economy
-        for agent in self.schedule.agents:
-            agent.disposable_income *= (1 + self.economic_growth / 100)
+        self.prices = self.prices * (1 + growth_rates)
 
-        # Allocate a portion of the growth to R&D, and add it to technological progress
-        rd_investment = max(self.economic_growth * self.rd_share, self.rd_min)
-        self.tech_progress += rd_investment
+        if self.schedule.steps == SHOCK_STEP and self.price_shock == True:
+            self.prices[SHOCK_INDEX] *= (1 + SHOCK_MAGNITUDE)
+
+        # Execute the restoration program if it is enabled
+        if self.schedule.steps == RESTORATION_STEP and self.restoration_ACTIVE:
+            self.restoration_program()
+
+        if self.schedule.steps >= ALLOWENCE_FROM and self.allowence_ACTIVE:
+            self.allowence_program()
 
         self.schedule.step()
 
