@@ -439,25 +439,6 @@ def model_page():
 
     periods = st.slider('Number of steps to simulate', 1, 100, 7)
 
-    # # Set up additional Streamlit widgets
-    # COST_INSULATION = st.slider('Cost Insulation', 0.1, 1.0, 0.45, format="%0.2f")
-    # TRESHOLD_LEVEL = st.slider('Threshold Level', 0.1, 1.0, 0.25, format="%0.2f")
-    # RESTORATION_COST = st.slider('Restoration Cost', 500, 2000, 1122 * COST_INSULATION, format="%0.2f")
-    # DWELLING_RESTORATION_LIMIT = st.slider('Dwelling Restoration Limit', 500, 2000, 900)
-    # RESTORATION_DWELLING_REDUCTION = st.slider('Restoration Dwelling Reduction', 0.1, 1.0, 0.5, format="%0.2f")
-    # RESTORATION_STEP = st.slider('Restoration Step', 10, 100, 20)
-    # GRANULARITY = st.selectbox('Granularity', ['DAY', 'MONTH', 'YEAR'], index=1)  # assuming the granularity choices are DAY, MONTH, and YEAR
-    # INABILITY_TRESHOLD = st.slider('Inability Threshold', 0.01, 0.20, 0.1, format="%0.2f")
-    # ARREARS_TRESHOLD = st.slider('Arrears Threshold', 0.5, 1.0, 0.75, format="%0.2f")
-    # MPS_VALUES = st.multiselect('Marginal Propensity to Save', options=[0.1, 0.13, 0.17, 0.20, 0.25], default=[0.1, 0.13, 0.17, 0.20, 0.25])
-    # SHOCK_INDEX = st.slider('Shock Index', 0, 10, 0)
-    # SHOCK_MAGNITUDE = st.slider('Shock Magnitude', 0.1, 1.0, 0.5, format="%0.2f")
-    # SHOCK_STEP = st.slider('Shock Step', 10, 100, 15)
-    # ALLOWENCE_CHEQUE = st.slider('Allowance Cheque', 10, 100, 50)
-    # RESTORATION_BUDGET = st.slider('Restoration Budget', 0, 10000, 0)
-    # ALLOWENCE_BUDGET = st.slider('Allowance Budget', 1000, 10000, 5000)
-    # ALLOWENCE_FROM = st.slider('Allowance From', 10, 100, 20)
-
     st.caption("It takes from 30 second up to 2 minutes to intialize and run the code. You can check that model is running calculation in top right corner.")
 
     #if st.button("Run Model"):
