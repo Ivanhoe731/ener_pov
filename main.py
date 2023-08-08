@@ -18,7 +18,7 @@ def main():
     else:
         st.title("ABM - Energy Poverty & Technological Progress")
 
-        st.header("Introduction")
+        st.header("Introduction - Website is currently being redesigned! New version from 09.08.2023")
         st.write("Welcome to the ABM - Energy Poverty & Technological Progress app. This app showcases an Agent-Based Model for analyzing energy poverty and technological progress. It consists of three main pages: Model, Info, and Code. Select a page from the sidebar to explore different aspects of the app. The application was developed as part of diploma thesis by Ivan Novák.")
 
         st.header("Contents")
