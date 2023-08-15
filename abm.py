@@ -20,23 +20,23 @@ import plotly.subplots as sp
 import plotly.express as px
 
 
-COST_INSULATION = 0.45
-TRESHOLD_LEVEL = 0.25 
-RESTORATION_COST = 1122 * COST_INSULATION
-DWELLING_RESTORATION_LIMIT = 900
-RESTORATION_DWELLING_REDUCTION = 0.5
-RESTORATION_STEP = 7
-GRANULARITY = 'MONTH'  ## ELABORATE ON THIS IN THE FURTHER VERSION
-INABILITY_TRESHOLD = 0.1
-ARREARS_TRESHOLD = 0.75
-MPS_VALUES = [0.1, 0.13, 0.17, 0.20, 0.25] # Marginal Propensity to Save
-SHOCK_INDEX = 0
-SHOCK_MAGNITUDE = 0.5
-SHOCK_STEP = 5
-ALLOWENCE_CHEQUE = 50
-RESTORATION_BUDGET = 12000
-ALLOWENCE_BUDGET = 50000
-ALLOWENCE_FROM = 9
+# COST_INSULATION = 0.45
+# TRESHOLD_LEVEL = 0.25 
+# RESTORATION_COST = 1122 * COST_INSULATION
+# DWELLING_RESTORATION_LIMIT = 900 ## FUTURE FEATURE
+# RESTORATION_DWELLING_REDUCTION = 0.5
+# RESTORATION_STEP = 7
+# GRANULARITY = 'MONTH'  ## ELABORATE ON THIS IN THE FURTHER VERSION
+# # INABILITY_TRESHOLD = 0.1
+# # ARREARS_TRESHOLD = 0.75
+# # MPS_VALUES = [0.1, 0.13, 0.17, 0.20, 0.25] # Marginal Propensity to Save
+# SHOCK_INDEX = 0
+# SHOCK_MAGNITUDE = 0.5
+# SHOCK_STEP = 5
+# ALLOWENCE_CHEQUE = 50
+# RESTORATION_BUDGET = 12000
+# ALLOWENCE_BUDGET = 50000
+# ALLOWENCE_FROM = 9
 
 
 class Household(Agent):
@@ -72,7 +72,7 @@ class Household(Agent):
         quintile = np.digitize(self.disposable_income, thresholds)
 
         # Set the MPS based on the quintile
-        self.mps = MPS_VALUES[quintile]
+        self.mps = Country.MPS_VALUES[quintile]
         
     def step(self):
         """Update the agent's savings in a step."""
@@ -82,7 +82,7 @@ class Household(Agent):
         self.update_mps()
 
         # Check if the agent is in arrears
-        if energy_costs > self.disposable_income * ARREARS_TRESHOLD:  # now considering arrears if energy cost exceeds 30% of disposable income
+        if energy_costs > self.disposable_income * Country.ARREARS_TRESHOLD:  # now considering arrears if energy cost exceeds 30% of disposable income
             self.arrears += energy_costs
         else:
             self.savings += (self.disposable_income - energy_costs) * self.mps
@@ -96,7 +96,7 @@ class Household(Agent):
                 self.arrears = self.arrears - self.savings  # set arrears to remaining amount
                 self.savings = 0
 
-        self.inability = self.energy_cost > self.disposable_income * INABILITY_TRESHOLD  # agent is in inability state if energy costs exceed 10% of income
+        self.inability = self.energy_cost > self.disposable_income * Country.INABILITY_TRESHOLD  # agent is in inability state if energy costs exceed 10% of income
 
         # Update disposable income based on growth rate
         growth_rate = np.random.uniform(self.model.growth_boundaries[0], self.model.growth_boundaries[1])
@@ -104,6 +104,10 @@ class Household(Agent):
 
 
 class Country(Model):
+
+    INABILITY_TRESHOLD = 0.1
+    ARREARS_TRESHOLD = 0.75
+    MPS_VALUES = [0.1, 0.13, 0.17, 0.20, 0.25] # Marginal Propensity to Save
     
     @classmethod
     def calculate_gini(cls, incomes):
@@ -130,19 +134,18 @@ class Country(Model):
     
     def restoration_program(self):
 
-        global RESTORATION_BUDGET
         # Sort the agents by income in ascending order
         sorted_agents = sorted(self.schedule.agents, key=lambda agent: (agent.disposable_income, -agent.dwelling))
 
         for agent in sorted_agents:
-            if RESTORATION_BUDGET >= RESTORATION_COST:
+            if self.RESTORATION_BUDGET >= self.RESTORATION_COST:
                 # Assign the restoration
                 agent.restoration_recieved = True
 
-                agent.dwelling *= (1- RESTORATION_DWELLING_REDUCTION)
+                agent.dwelling *= (1- self.RESTORATION_DWELLING_REDUCTION)
 
                 # Deduct the restoration cost from the budget
-                RESTORATION_BUDGET -= RESTORATION_COST
+                self.RESTORATION_BUDGET -= RESTORATION_COST
             else:
                 # If the budget is not sufficient for another restoration, break the loop
                 break
@@ -233,7 +236,7 @@ class Country(Model):
             num_arrears_quintile = min(arrears_per_quintile[i], len(quintile))
             arrears_agents = np.random.choice(quintile, num_arrears_quintile, replace=False)
             for agent in arrears_agents:
-                agent.arrears = 2 * ARREARS_TRESHOLD * agent.disposable_income  # assign 0.6 * disposable_income
+                agent.arrears = 2 * Country.ARREARS_TRESHOLD * agent.disposable_income  # assign 0.6 * disposable_income
             assigned_arrears += num_arrears_quintile
 
         # Assign remaining arrears if any
@@ -244,7 +247,7 @@ class Country(Model):
             quintile = [agent for agent in agents[start:end] if not agent.arrears > 0]
             if quintile:
                 agent = np.random.choice(quintile)
-                agent.arrears = ARREARS_TRESHOLD * agent.disposable_income  # assign 0.6 * disposable_income
+                agent.arrears = Country.ARREARS_TRESHOLD * agent.disposable_income  # assign 0.6 * disposable_income
                 assigned_arrears += 1
             else:
                 i += 1
@@ -261,9 +264,9 @@ class Country(Model):
         for agent in agents:
             min_dwelling, max_dwelling = 500, 2000
             if agent.inability:
-                min_dwelling = max(min_dwelling, int(np.ceil((agent.disposable_income * (INABILITY_TRESHOLD + buffer)) / energy_price)))
+                min_dwelling = max(min_dwelling, int(np.ceil((agent.disposable_income * (Country.INABILITY_TRESHOLD + buffer)) / energy_price)))
             else:
-                max_dwelling = min(max_dwelling, int((agent.disposable_income * (INABILITY_TRESHOLD - buffer)) / energy_price))
+                max_dwelling = min(max_dwelling, int((agent.disposable_income * (Country.INABILITY_TRESHOLD - buffer)) / energy_price))
 
             # Generate a list of feasible dwelling values
             feasible_dwelling = list(range(min_dwelling, max_dwelling + 1))
@@ -278,7 +281,22 @@ class Country(Model):
             if agent.disposable_income < quintile_thresholds[1] and agent.inability:  # If in bottom two quintiles and inability is True
                 agent.dwelling = min(max_dwelling, int(agent.dwelling * 1.25))  # Increase dwelling size by 25%, but not more than max_dwelling
 
-    def __init__(self, N, median_income, min_disposal, gini_target, inability_target, arrears_target, growth_boundaries, prices, shares_p, growth_rate_lower_bound, growth_rate_upper_bound, restoration_ACTIVE = False, allowence_ACTIVE = False, price_shock = False):
+    def __init__(self, N, median_income, min_disposal, gini_target, inability_target, arrears_target,
+                growth_boundaries, prices, shares_p, growth_rate_lower_bound, growth_rate_upper_bound,
+                restoration_ACTIVE = False, allowence_ACTIVE = False, price_shock = False, 
+                COST_INSULATION = 0.45,
+                TRESHOLD_LEVEL = 0.25,
+                AVERAGE_HH_SIZE = 1122,
+                DWELLING_RESTORATION_LIMIT = 900,
+                RESTORATION_DWELLING_REDUCTION = 0.5,
+                RESTORATION_STEP = 7,
+                SHOCK_INDEX = 0,
+                SHOCK_MAGNITUDE = 0.5,
+                SHOCK_STEP = 5,
+                ALLOWENCE_CHEQUE = 50,
+                RESTORATION_BUDGET = 12000,
+                ALLOWENCE_BUDGET = 50000,
+                ALLOWENCE_FROM = 9):
         self.num_agents = N
         self.median_income = median_income
         self.min_disposal = min_disposal
@@ -296,6 +314,17 @@ class Country(Model):
         self.allowence_budget = ALLOWENCE_BUDGET
         self.allowence_cheque = ALLOWENCE_CHEQUE
         self.arrears_target = arrears_target
+        self.COST_INSULATION = COST_INSULATION
+        self.TRESHOLD_LEVEL =  TRESHOLD_LEVEL 
+        self.RESTORATION_COST = self.COST_INSULATION * AVERAGE_HH_SIZE
+        self.DWELLING_RESTORATION_LIMIT = DWELLING_RESTORATION_LIMIT
+        self.RESTORATION_DWELLING_REDUCTION = RESTORATION_DWELLING_REDUCTION
+        self.RESTORATION_STEP = RESTORATION_STEP
+        self.SHOCK_INDEX = SHOCK_INDEX
+        self.SHOCK_MAGNITUDE = SHOCK_MAGNITUDE
+        self.SHOCK_STEP = SHOCK_STEP
+        self.ALLOWENCE_FROM = ALLOWENCE_FROM
+        
         # Other initialization code...
         self.schedule = RandomActivation(self)
         self.datacollector = DataCollector(
@@ -357,7 +386,7 @@ class Country(Model):
             end = (i + 1) * num_agents // 5 if i < 4 else num_agents
             quintile_agents = agents[start:end]
             for agent in quintile_agents:
-                agent.mps = MPS_VALUES[i]
+                agent.mps = Country.MPS_VALUES[i]
 
     @property
     def energy_price(self):
@@ -373,14 +402,14 @@ class Country(Model):
 
         self.prices = self.prices * (1 + growth_rates)
 
-        if self.schedule.steps == SHOCK_STEP and self.price_shock == True:
-            self.prices[SHOCK_INDEX] *= (1 + SHOCK_MAGNITUDE)
+        if self.schedule.steps == self.SHOCK_STEP and self.price_shock == True:
+            self.prices[self.SHOCK_INDEX] *= (1 + self.SHOCK_MAGNITUDE)
 
         # Execute the restoration program if it is enabled
-        if self.schedule.steps == RESTORATION_STEP and self.restoration_ACTIVE:
+        if self.schedule.steps == self.RESTORATION_STEP and self.restoration_ACTIVE:
             self.restoration_program()
 
-        if self.schedule.steps >= ALLOWENCE_FROM and self.allowence_ACTIVE:
+        if self.schedule.steps >= self.ALLOWENCE_FROM and self.allowence_ACTIVE:
             self.allowence_program()
 
         self.schedule.step()
@@ -419,6 +448,9 @@ def model_page():
     # Define the input parameters using Streamlit widgets in two columns
 
     set1, set2 = st.columns(2)
+    st.markdown('---')
+
+    st.header('Agents')
 
     # Set up Streamlit widgets
     N = st.slider('Number of agents', 100, 3000, 1000)
@@ -427,15 +459,27 @@ def model_page():
     gini_target = st.slider("Gini Target", 0.1, 0.9, 0.30, format="%0.2f")
     inability_target = st.slider("Inability Target", 0.1, 1.0, 0.2, format="%0.2f")
     arrears_target = st.slider("Arrears Target", 0.01, 1.0, 0.07, format="%0.2f")
+
+    st.markdown('---')
+    st.header('Country')
+
     growth_boundaries = [st.slider("Growth boundary lower", 0.0, 1.0, 0.0, format="%0.2f"), st.slider("Growth boundary upper", 0.0, 1.0, 0.005, format="%0.2f")]
     prices = np.array([st.slider("Price of Yellow Fuel", 0.01, 0.5, 0.2, format="%0.2f"), st.slider("Price of Brown Fuel", 0.01, 0.2, 0.06, format="%0.2f")])
     shares_yellow = st.slider("Share of Yellow Fuel", 0.1, 1.0, 0.7, format="%0.2f")
     shares_p = np.array([shares_yellow, 1 - shares_yellow])
     growth_rate_lower_bound = np.array([st.slider("Growth rate lower bound for Yellow Fuel", -0.05, 0.0, -0.01, format="%0.2f"), st.slider("Growth rate lower bound for Brown Fuel", -0.05, 0.0, -0.01, format="%0.2f")])
     growth_rate_upper_bound = np.array([st.slider("Growth rate upper bound for Yellow Fuel", 0.0, 0.05, 0.02, format="%0.2f"), st.slider("Growth rate upper bound for Brown Fuel", 0.0, 0.05, 0.01, format="%0.2f")])
+    
+    st.markdown('---')
+    st.subheader('Policies')
+    
     allowence_ACTIVE = st.checkbox("Allowence program", value=False)
     restoration_ACTIVE = st.checkbox("Restoration program", value=False)
     price_shock = st.checkbox("Price shock", value=False)
+
+    st.markdown('---')    
+    
+    st.header('Simulation tenure')
 
     periods = st.slider('Number of steps to simulate', 1, 100, 7)
 
