@@ -474,6 +474,7 @@ def model_page():
     st.subheader('Policies')
     
     allowence_ACTIVE = st.checkbox("Allowence program", value=False)
+
     restoration_ACTIVE = st.checkbox("Restoration program", value=False)
     price_shock = st.checkbox("Price shock", value=False)
 
