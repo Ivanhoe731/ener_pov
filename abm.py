@@ -453,6 +453,7 @@ def model_page():
     st.header('Agents')
 
     # Set up Streamlit widgets
+    st.caption("Number of agent used for simulation - small and large values are unrepresentative or computationally intensive respectivelly")
     N = st.slider('Number of agents', 100, 3000, 1000)
     median_income = st.slider('Median income', 500, 5000, 1700)
     min_disposal = st.slider('Minimum disposal', 100, 2000, 900)
@@ -470,10 +471,17 @@ def model_page():
     growth_rate_lower_bound = np.array([st.slider("Growth rate lower bound for Yellow Fuel", -0.05, 0.0, -0.01, format="%0.2f"), st.slider("Growth rate lower bound for Brown Fuel", -0.05, 0.0, -0.01, format="%0.2f")])
     growth_rate_upper_bound = np.array([st.slider("Growth rate upper bound for Yellow Fuel", 0.0, 0.05, 0.02, format="%0.2f"), st.slider("Growth rate upper bound for Brown Fuel", 0.0, 0.05, 0.01, format="%0.2f")])
     
+
     st.markdown('---')
     st.subheader('Policies')
+
+    st.markdown('---')
+    st.caption('Allowence program')
+    st.caption("Allowence program introduces allowences to agents. Each agent that is experiencing inability will get allowence each step, until the depleption of the budget")
+    
     
     allowence_ACTIVE = st.checkbox("Allowence program", value=False)
+    budget_allowence = st.number_input("Allowence program budget")
 
     restoration_ACTIVE = st.checkbox("Restoration program", value=False)
     price_shock = st.checkbox("Price shock", value=False)
