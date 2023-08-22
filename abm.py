@@ -473,20 +473,31 @@ def model_page():
     
 
     st.markdown('---')
-    st.subheader('Policies')
-
-    st.markdown('---')
-    st.caption('Allowence program')
-    st.caption("Allowence program introduces allowences to agents. Each agent that is experiencing inability will get allowence each step, until the depleption of the budget")
+    st.subheader('Allowence program')
+    st.caption(" * Allowence program introduces allowences to agents. Each agent that is experiencing inability will get allowence each step, until the depleption of the budget. The assigment of allowence is strictly income-based. In the current version of the model is the cutoff set to 40th percentile of incomes. \n"
+               + " * Allowence program budget is the total amount of the program that can be used in all steps together \n"
+               + " * Allowence cheque amount is the amount assigned to each agent that can reach the program")
     
     
-    allowence_ACTIVE = st.checkbox("Allowence program", value=False)
-    budget_allowence = st.number_input("Allowence program budget")
+    allowence_ACTIVE = st.checkbox("To activate allowence program check this box", value=False)
+    budget_allowence = st.number_input("Allowence program budget") # prepsat na zmenu promenne 
+    check_allowence = st.number_input("Allowence cheque amount") # prespat na zmeny promenne pro allowence cheqs
 
-    restoration_ACTIVE = st.checkbox("Restoration program", value=False)
-    price_shock = st.checkbox("Price shock", value=False)
+
+    st.markdown("---")
+    st.subheader("Restoration program")
+    st.caption(" * Restoration program is mimicking investments to technological innovations (for example cookstove renovation, heating renovation and so on). In the current model the restoration program aims at insulation of dwellings. \n"
+               + "* In the current model version, the cost of each restored dwelling is calculated using average European household size 1122 squared feet. The cost of insulation material is a variable, but further details can be found in this pdf: https://www.energy.gov/sites/prod/files/guide_to_home_insulation.pdf \n"
+               + "The program is excercised in one step. It is income- and dweeling-intensity-based, applicable until the budget depleption, restoring the agent's dwelling from worst to best")
+
+
+    restoration_ACTIVE = st.checkbox("To activate restoration program check this box", value=False)
+    restoration_budget = st.number_input("Restoration program budget")
+    insulation_cost = st.number_input("Cost of the used insulation material")
 
     st.markdown('---')    
+    st.subheader("Price shock")
+    price_shock = st.checkbox("To introduce price shock, check this box", value=False)
     
     st.header('Simulation tenure')
 
